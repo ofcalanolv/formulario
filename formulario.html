@@ -1,0 +1,495 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Formulário Estilo Google Forms</title>
+    <style>
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            background-color: #f9f9f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .form-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 600px;
+        }
+        h1 {
+            font-size: 24px;
+            color: #202124;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            font-size: 14px;
+            color: #202124;
+            margin-bottom: 5px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: #1a73e8;
+        }
+        input[readonly] {
+            background-color: #f5f5f5;
+        }
+        .required::after {
+            content: ' *';
+            color: #d93025;
+        }
+        button {
+            background-color: #1a73e8;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #1557b0;
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 14px;
+        }
+        .birth-date-group {
+            display: flex;
+            align-items: center;
+        }
+        .birth-date-group input {
+            flex: 1;
+        }
+        #ageDisplay {
+            margin-left: 10px;
+            font-size: 14px;
+            color: #555;
+        }
+        .address-group {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 10px;
+        }
+        .address-group .form-group {
+            margin-bottom: 10px;
+        }
+        .photo-group, .location-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #photoInput {
+            display: none;
+        }
+        #photoPreview {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        #photoPreview img {
+            width: 100%;
+            height: auto;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+        }
+        .location-coordinates {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        #mapImage {
+            max-width: 200px;
+            height: auto;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            margin-top: 10px;
+            display: none;
+        }
+        #locationAddress {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div class="form-container">
+        <h1>Formulário de Coleta de Dados</h1>
+        <form id="userForm">
+            <div class="form-group">
+                <label for="name" class="required">Nome Completo</label>
+                <input type="text" id="name" name="name" required>
+            </div>
+            <div class="address-group">
+                <div class="form-group">
+                    <label for="street" class="required">Logradouro</label>
+                    <input type="text" id="street" name="street" required>
+                </div>
+                <div class="form-group">
+                    <label for="number" class="required">Número</label>
+                    <input type="text" id="number" name="number" required>
+                </div>
+                <div class="form-group">
+                    <label for="complement">Complemento (opcional)</label>
+                    <input type="text" id="complement" name="complement">
+                </div>
+                <div class="form-group">
+                    <label for="reference">Ponto de Referência (opcional)</label>
+                    <input type="text" id="reference" name="reference">
+                </div>
+            </div>
+            <div class="form-group birth-date-group">
+                <div>
+                    <label for="birthDate" class="required">Data de Nascimento (DD/MM/AAAA)</label>
+                    <input type="text" id="birthDate" name="birthDate" placeholder="DD/MM/AAAA" maxlength="10" required>
+                </div>
+                <span id="ageDisplay"></span>
+            </div>
+            <div class="form-group">
+                <label for="phone">Telefone (opcional)</label>
+                <input type="tel" id="phone" name="phone">
+            </div>
+            <div class="form-group">
+                <label for="history">Histórico de Usuário (opcional)</label>
+                <textarea id="history" name="history" rows="4" maxlength="1000"></textarea>
+            </div>
+            <div class="form-group photo-group">
+                <label for="photoInput">Fotos (opcional)</label>
+                <input type="file" id="photoInput" name="photos" accept="image/*" capture="environment" multiple>
+                <button type="button" id="takePhoto">Tirar Foto</button>
+            </div>
+            <div id="photoPreview"></div>
+            <div class="form-group location-group">
+                <label for="captureLocation">Geolocalização (opcional)</label>
+                <button type="button" id="captureLocation">Capturar Localização</button>
+            </div>
+            <div class="form-group location-coordinates">
+                <div>
+                    <label for="latitude">Latitude</label>
+                    <input type="text" id="latitude" name="latitude" readonly>
+                </div>
+                <div>
+                    <label for="longitude">Longitude</label>
+                    <input type="text" id="longitude" name="longitude" readonly>
+                </div>
+            </div>
+            <div id="mapPreview">
+                <img id="mapImage" alt="Mapa da localização">
+            </div>
+            <div id="locationAddress"></div>
+            <button type="submit">Enviar</button>
+        </form>
+        <div id="status"></div>
+    </div>
+    <script>
+        // Função para aplicar máscara de data
+        document.getElementById('birthDate').addEventListener('input', (e) => {
+            let value = e.target.value.replace(/\D/g, ''); // Remove tudo que não é dígito
+            if (value.length > 8) value = value.slice(0, 8); // Limita a 8 dígitos
+            if (value.length > 4) {
+                value = value.slice(0, 2) + '/' + value.slice(2, 4) + '/' + value.slice(4);
+            } else if (value.length > 2) {
+                value = value.slice(0, 2) + '/' + value.slice(2);
+            }
+            e.target.value = value;
+
+            // Atualizar idade
+            const age = calculateAge(value);
+            const ageDisplay = document.getElementById('ageDisplay');
+            if (age !== null && age >= 0) {
+                ageDisplay.textContent = `Idade: ${age} anos`;
+            } else {
+                ageDisplay.textContent = '';
+            }
+        });
+
+        // Função para validar e calcular a idade
+        function calculateAge(birthDateStr) {
+            const regex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+            const match = birthDateStr.match(regex);
+            if (!match) return null;
+
+            const day = parseInt(match[1], 10);
+            const month = parseInt(match[2], 10) - 1; // Meses em JavaScript são 0-based
+            const year = parseInt(match[3], 10);
+
+            const birthDate = new Date(year, month, day);
+            if (isNaN(birthDate) || birthDate.getDate() !== day || birthDate.getMonth() !== month || birthDate.getFullYear() !== year) {
+                return null; // Data inválida
+            }
+
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            return age;
+        }
+
+        // Função para exibir previews das fotos
+        function displayPhotoPreviews(files) {
+            const previewContainer = document.getElementById('photoPreview');
+            previewContainer.innerHTML = ''; // Limpa previews anteriores
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = document.createElement('img');
+                    img.src = e.target.result;
+                    previewContainer.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Evento para o botão "Tirar Foto"
+        document.getElementById('takePhoto').addEventListener('click', () => {
+            document.getElementById('photoInput').click();
+        });
+
+        // Evento para exibir previews quando fotos são selecionadas
+        document.getElementById('photoInput').addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length > 0) {
+                displayPhotoPreviews(files);
+            } else {
+                document.getElementById('photoPreview').innerHTML = '';
+            }
+        });
+
+        // Função para capturar geolocalização
+        document.getElementById('captureLocation').addEventListener('click', () => {
+            const latitudeInput = document.getElementById('latitude');
+            const longitudeInput = document.getElementById('longitude');
+            const mapImage = document.getElementById('mapImage');
+            const locationAddress = document.getElementById('locationAddress');
+            const status = document.getElementById('status');
+
+            if (!navigator.geolocation) {
+                status.textContent = 'Geolocalização não é suportada por este navegador. Use um navegador moderno como Chrome ou Safari.';
+                status.style.color = '#d93025';
+                return;
+            }
+
+            status.textContent = 'Capturando localização...';
+            status.style.color = '#555';
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude.toFixed(6);
+                    const lng = position.coords.longitude.toFixed(6);
+                    latitudeInput.value = lat;
+                    longitudeInput.value = lng;
+
+                    // Gerar imagem estática usando LocationIQ Static Maps API (baseado em OpenStreetMap)
+                    // Não requer chave de API para uso básico (até 5.000 requisições diárias)
+                    // Para uso comercial ou alto volume, registre uma chave gratuita em: https://locationiq.com/
+                    const mapUrl = `https://tiles.locationiq.com/v3/streets/static/${lng},${lat},15/200x150.png?key=pk.anonymous`;
+                    mapImage.src = mapUrl;
+                    mapImage.style.display = 'block';
+                    mapImage.onerror = () => {
+                        status.textContent = 'Erro ao carregar a imagem do mapa. Verifique sua conexão com a internet ou hospede o formulário em um servidor local (`http://localhost`) ou online (`https://`).';
+                        status.style.color = '#d93025';
+                        console.error('Falha ao carregar a imagem do mapa. URL:', mapUrl);
+                        latitudeInput.value = lat; // Mantém as coordenadas mesmo se a imagem falhar
+                        longitudeInput.value = lng;
+                    };
+                    mapImage.onload = () => {
+                        status.textContent = 'Localização capturada com sucesso!';
+                        status.style.color = '#1a73e8';
+                    };
+
+                    // Geocodificação reversa com Nominatim (OpenStreetMap)
+                    // Não requer chave de API, mas respeite o limite de 1 requisição por segundo
+                    // Para uso em produção, inclua um User-Agent ou e-mail: https://nominatim.org/release-docs/develop/api/Reverse/
+                    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`, {
+                        headers: {
+                            'User-Agent': 'FormularioTeste/1.0 (seuemail@example.com)' // Substitua por seu e-mail ou nome do projeto
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data && data.display_name) {
+                            locationAddress.textContent = `Endereço aproximado: ${data.display_name}`;
+                        } else {
+                            locationAddress.textContent = 'Endereço não encontrado.';
+                        }
+                    })
+                    .catch(error => {
+                        locationAddress.textContent = 'Erro ao obter o endereço. Verifique sua conexão com a internet.';
+                        console.error('Erro na geocodificação reversa:', error);
+                    });
+                },
+                (error) => {
+                    let errorMessage;
+                    switch (error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage = 'Permissão para geolocalização negada. Por favor, permita o acesso à localização nas configurações do navegador.';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage = 'Informações de localização indisponíveis. Verifique se o GPS ou a conexão com a internet estão ativos.';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage = 'Tempo esgotado para obter a localização. Tente novamente.';
+                            break;
+                        default:
+                            errorMessage = 'Erro desconhecido ao obter a localização.';
+                            break;
+                    }
+                    status.textContent = errorMessage;
+                    status.style.color = '#d93025';
+                    mapImage.src = '';
+                    mapImage.style.display = 'none';
+                    latitudeInput.value = '';
+                    longitudeInput.value = '';
+                    locationAddress.textContent = '';
+                },
+                {
+                    timeout: 10000, // Tempo limite de 10 segundos
+                    maximumAge: 0, // Forçar localização nova
+                    enableHighAccuracy: true // Maior precisão
+                }
+            );
+        });
+
+        document.getElementById('userForm').addEventListener('submit', (event) => {
+            event.preventDefault();
+            const name = document.getElementById('name').value;
+            const street = document.getElementById('street').value;
+            const number = document.getElementById('number').value;
+            const complement = document.getElementById('complement').value;
+            const reference = document.getElementById('reference').value;
+            const birthDate = document.getElementById('birthDate').value;
+            const phone = document.getElementById('phone').value;
+            const history = document.getElementById('history').value;
+            const photoInput = document.getElementById('photoInput');
+            const latitude = document.getElementById('latitude').value;
+            const longitude = document.getElementById('longitude').value;
+            const mapImage = document.getElementById('mapImage');
+            const locationAddress = document.getElementById('locationAddress');
+            const status = document.getElementById('status');
+
+            // Validação simples
+            if (!name || !street || !number || !birthDate) {
+                status.textContent = 'Por favor, preencha os campos obrigatórios (Nome, Logradouro, Número e Data de Nascimento).';
+                status.style.color = '#d93025';
+                return;
+            }
+
+            // Validar formato e validade da data de nascimento
+            const age = calculateAge(birthDate);
+            if (age === null || age < 0) {
+                status.textContent = 'Por favor, insira uma data de nascimento válida no formato DD/MM/AAAA.';
+                status.style.color = '#d93025';
+                return;
+            }
+
+            // Processar fotos
+            const photos = [];
+            const files = photoInput.files;
+            const readPromises = Array.from(files).map(file => {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve({ name: file.name, data: e.target.result });
+                    reader.readAsDataURL(file);
+                });
+            });
+
+            Promise.all(readPromises).then(photoData => {
+                photos.push(...photoData);
+
+                // Exibir os dados no console
+                console.log('Dados do formulário:');
+                console.log('Nome:', name);
+                console.log('Logradouro:', street);
+                console.log('Número:', number);
+                console.log('Complemento:', complement || 'Não informado');
+                console.log('Ponto de Referência:', reference || 'Não informado');
+                console.log('Data de Nascimento:', birthDate);
+                console.log('Idade:', age);
+                console.log('Telefone:', phone || 'Não informado');
+                console.log('Histórico de Usuário:', history || 'Não informado');
+                console.log('Fotos:', photos.length > 0 ? photos : 'Nenhuma foto selecionada');
+                console.log('Geolocalização:', latitude && longitude ? {
+                    latitude,
+                    longitude,
+                    mapUrl: mapImage.src || 'Imagem do mapa não carregada',
+                    address: locationAddress.textContent || 'Endereço não obtido'
+                } : 'Não capturada');
+
+                // Mostrar mensagem de sucesso
+                status.textContent = 'Formulário enviado com sucesso!';
+                status.style.color = '#1a73e8';
+
+                // Limpar o formulário
+                document.getElementById('userForm').reset();
+                document.getElementById('ageDisplay').textContent = '';
+                document.getElementById('photoPreview').innerHTML = '';
+                document.getElementById('latitude').value = '';
+                document.getElementById('longitude').value = '';
+                mapImage.src = '';
+                mapImage.style.display = 'none';
+                locationAddress.textContent = '';
+            });
+        });
+    </script>
+</body>
+</html>
